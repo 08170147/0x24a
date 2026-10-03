@@ -22,7 +22,7 @@ permissions:
   contents: read
 
 env:
-  UNITY_PROJECT: KanadeDX_Unity_iOS
+  UNITY_PROJECT: .
   UNITY_VERSION: 2022.3.62f3
 
 jobs:
@@ -45,8 +45,8 @@ jobs:
       - name: Cache Unity Library
         uses: actions/cache@v4
         with:
-          path: ${{ env.UNITY_PROJECT }}/Library
-          key: unity-library-ios-${{ env.UNITY_VERSION }}-${{ hashFiles('KanadeDX_Unity_iOS/Packages/manifest.json', 'KanadeDX_Unity_iOS/Packages/packages-lock.json', 'KanadeDX_Unity_iOS/ProjectSettings/ProjectVersion.txt') }}
+          path: Library
+          key: unity-library-ios-${{ env.UNITY_VERSION }}-${{ hashFiles('Packages/manifest.json', 'Packages/packages-lock.json', 'ProjectSettings/ProjectVersion.txt') }}
           restore-keys: |
             unity-library-ios-${{ env.UNITY_VERSION }}-
 
@@ -58,14 +58,13 @@ jobs:
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
           UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
         with:
-          projectPath: ${{ env.UNITY_PROJECT }}
+          projectPath: .
           unityVersion: ${{ env.UNITY_VERSION }}
           targetPlatform: iOS
           buildMethod: KanadeDXiOSBuild.Build
           allowDirtyBuild: true
 
       - name: Verify generated Xcode project
-        working-directory: ${{ env.UNITY_PROJECT }}
         run: |
           test -f Builds/iOS/Unity-iPhone.xcodeproj/project.pbxproj
           test -f Builds/iOS/Info.plist
@@ -102,7 +101,6 @@ jobs:
           echo "PROFILE_UUID=$PROFILE_UUID" >> "$GITHUB_ENV"
 
       - name: Archive and export signed IPA
-        working-directory: ${{ env.UNITY_PROJECT }}
         env:
           TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           BUNDLE_ID: ${{ inputs.bundle_id }}
@@ -112,7 +110,6 @@ jobs:
         run: bash Tools/cloud_build_ipa.sh
 
       - name: Verify final IPA
-        working-directory: ${{ env.UNITY_PROJECT }}
         env:
           BUNDLE_ID: ${{ inputs.bundle_id }}
           TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -122,7 +119,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: KanadeDX-IPA-${{ inputs.export_method }}
-          path: ${{ env.UNITY_PROJECT }}/Builds/KanadeDX.ipa
+          path: Builds/KanadeDX.ipa
           if-no-files-found: error
           retention-days: 14
 
@@ -132,7 +129,7 @@ jobs:
         with:
           name: KanadeDX-build-diagnostics
           path: |
-            ${{ env.UNITY_PROJECT }}/Builds/**/*.log
-            ${{ env.UNITY_PROJECT }}/Builds/ExportOptions.plist
+            Builds/**/*.log
+            Builds/ExportOptions.plist
           if-no-files-found: ignore
           retention-days: 7
