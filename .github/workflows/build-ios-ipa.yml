@@ -1,0 +1,138 @@
+name: KanadeDX iOS IPA
+
+on:
+  workflow_dispatch:
+    inputs:
+      export_method:
+        description: "Xcode export method"
+        required: true
+        default: app-store
+        type: choice
+        options:
+          - app-store
+          - ad-hoc
+          - development
+      bundle_id:
+        description: "Apple App ID / Bundle Identifier"
+        required: true
+        default: app.KanadeDX
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  UNITY_PROJECT: KanadeDX_Unity_iOS
+  UNITY_VERSION: 2022.3.62f3
+
+jobs:
+  build-ipa:
+    name: Unity → Xcode → signed IPA
+    runs-on: macos-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Check Xcode
+        run: |
+          xcodebuild -version
+          xcode-select -p
+
+      - name: Cache Unity Library
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.UNITY_PROJECT }}/Library
+          key: unity-library-ios-${{ env.UNITY_VERSION }}-${{ hashFiles('KanadeDX_Unity_iOS/Packages/manifest.json', 'KanadeDX_Unity_iOS/Packages/packages-lock.json', 'KanadeDX_Unity_iOS/ProjectSettings/ProjectVersion.txt') }}
+          restore-keys: |
+            unity-library-ios-${{ env.UNITY_VERSION }}-
+
+      - name: Build Unity iOS Xcode project
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+        with:
+          projectPath: ${{ env.UNITY_PROJECT }}
+          unityVersion: ${{ env.UNITY_VERSION }}
+          targetPlatform: iOS
+          buildMethod: KanadeDXiOSBuild.Build
+          allowDirtyBuild: true
+
+      - name: Verify generated Xcode project
+        working-directory: ${{ env.UNITY_PROJECT }}
+        run: |
+          test -f Builds/iOS/Unity-iPhone.xcodeproj/project.pbxproj
+          test -f Builds/iOS/Info.plist
+          test -f Builds/iOS/KanadeDX.entitlements
+          grep -q 'NFCReaderUsageDescription' Builds/iOS/Info.plist
+          grep -q 'com.apple.developer.nfc.readersession.formats' Builds/iOS/KanadeDX.entitlements
+          grep -q 'TAG' Builds/iOS/KanadeDX.entitlements
+
+      - name: Import Apple signing certificate
+        uses: Apple-Actions/import-codesign-certs@v7
+        with:
+          p12-file-base64: ${{ secrets.APPSTORE_CERTIFICATES_FILE_BASE64 }}
+          p12-password: ${{ secrets.APPSTORE_CERTIFICATES_PASSWORD }}
+
+      - name: Download Apple provisioning profile
+        id: profiles
+        uses: Apple-Actions/download-provisioning-profiles@v6
+        with:
+          bundle-id: ${{ inputs.bundle_id }}
+          profile-type: ${{ inputs.export_method == 'ad-hoc' && 'IOS_APP_ADHOC' || inputs.export_method == 'development' && 'IOS_APP_DEVELOPMENT' || 'IOS_APP_STORE' }}
+          issuer-id: ${{ vars.APPSTORE_ISSUER_ID }}
+          api-key-id: ${{ vars.APPSTORE_API_KEY_ID }}
+          api-private-key: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+
+      - name: Resolve provisioning profile
+        env:
+          PROFILES_JSON: ${{ steps.profiles.outputs.profiles }}
+        run: |
+          PROFILE_NAME="$(printf '%s' "$PROFILES_JSON" | jq -r '.[0].name')"
+          PROFILE_UUID="$(printf '%s' "$PROFILES_JSON" | jq -r '.[0].uuid')"
+          test -n "$PROFILE_NAME" && test "$PROFILE_NAME" != "null"
+          test -n "$PROFILE_UUID" && test "$PROFILE_UUID" != "null"
+          echo "PROFILE_NAME=$PROFILE_NAME" >> "$GITHUB_ENV"
+          echo "PROFILE_UUID=$PROFILE_UUID" >> "$GITHUB_ENV"
+
+      - name: Archive and export signed IPA
+        working-directory: ${{ env.UNITY_PROJECT }}
+        env:
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          BUNDLE_ID: ${{ inputs.bundle_id }}
+          EXPORT_METHOD: ${{ inputs.export_method }}
+          PROFILE_NAME: ${{ env.PROFILE_NAME }}
+          PROFILE_UUID: ${{ env.PROFILE_UUID }}
+        run: bash Tools/cloud_build_ipa.sh
+
+      - name: Verify final IPA
+        working-directory: ${{ env.UNITY_PROJECT }}
+        env:
+          BUNDLE_ID: ${{ inputs.bundle_id }}
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: bash Tools/verify_ipa.sh Builds/KanadeDX.ipa "$BUNDLE_ID" "$TEAM_ID"
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: KanadeDX-IPA-${{ inputs.export_method }}
+          path: ${{ env.UNITY_PROJECT }}/Builds/KanadeDX.ipa
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload build diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: KanadeDX-build-diagnostics
+          path: |
+            ${{ env.UNITY_PROJECT }}/Builds/**/*.log
+            ${{ env.UNITY_PROJECT }}/Builds/ExportOptions.plist
+          if-no-files-found: ignore
+          retention-days: 7
