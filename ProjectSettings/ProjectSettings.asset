@@ -1,0 +1,33 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!129 &1
+PlayerSettings:
+  m_ObjectHideFlags: 0
+  serializedVersion: 26
+  productGUID: 4f2c8d3f8c1a4f3d8d4d2e4b8a5c9f11
+  AndroidProfiler: 0
+  AndroidFilterTouchesWhenObscured: 0
+  defaultScreenOrientation: 4
+  targetDevice: 2
+  useOnDemandResources: 0
+  useOSAutorotation: 1
+  use32BitDisplayBuffer: 1
+  displayResolutionDialog: 1
+  macRetinaSupport: 1
+  runInBackground: 1
+  switchMaxWorkerMultiple: 8
+  bundleVersion: 1.0.0
+  metroPackageVersion: 1.0.0.0
+  metroCertificatePath: 
+  iPhoneBuildNumber: 1
+  bundleIdentifier: app.KanadeDX
+  iPhoneSdkVersion: 988
+  iOSTargetOSVersionString: 13.0
+  iOSRequireARKit: 0
+  appleDeveloperTeamID: 
+  iOSManualSigningProvisioningProfileID: 
+  iOSManualSigningProvisioningProfileType: 0
+  iOSManualSigningProvisioningProfileName: 
+  iOSManualSigningProvisioningProfileUUID: 
+  appleEnableAutomaticSigning: 0
+  iOSAutomaticallyDetectAndAddCapabilities: 1
