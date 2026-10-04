@@ -60,10 +60,17 @@ jobs:
           test -f Builds/iOS/Unity-iPhone.xcodeproj/project.pbxproj
           test -f Builds/iOS/Info.plist
           test -f Builds/iOS/KanadeDX.entitlements
+
           grep -q 'NFCReaderUsageDescription' Builds/iOS/Info.plist
-          grep -q 'com.apple.developer.nfc.readersession.formats' Builds/iOS/KanadeDX.entitlements
+
+          grep -q \
+            'com.apple.developer.nfc.readersession.formats' \
+            Builds/iOS/KanadeDX.entitlements
+
           grep -q 'TAG' Builds/iOS/KanadeDX.entitlements
-          echo "Xcode project and NFC configuration verified."
+
+          echo "Xcode project verified."
+          echo "NFC configuration verified."
 
       - name: Inspect signing configuration
         run: |
@@ -74,12 +81,17 @@ jobs:
             -showBuildSettings \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            | grep -E 'PRODUCT_BUNDLE_IDENTIFIER|CODE_SIGN|INFOPLIST_FILE|CODE_SIGN_ENTITLEMENTS' || true
+            | grep -E \
+              'PRODUCT_BUNDLE_IDENTIFIER|CODE_SIGN|INFOPLIST_FILE|CODE_SIGN_ENTITLEMENTS' \
+              || true
 
       - name: Package Xcode project
         run: |
           rm -f Builds/KanadeDX-iOS-XcodeProject.zip
-          ditto -c -k --sequesterRsrc --keepParent \
+
+          ditto -c -k \
+            --sequesterRsrc \
+            --keepParent \
             Builds/iOS \
             Builds/KanadeDX-iOS-XcodeProject.zip
 
