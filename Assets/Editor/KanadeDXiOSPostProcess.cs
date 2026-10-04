@@ -22,7 +22,7 @@ public static class KanadeDXiOSPostProcess
         // the final app target.
         project.AddFrameworkToProject(frameworkTarget, "CoreNFC.framework", false);
         project.AddFrameworkToProject(mainTarget, "CoreNFC.framework", false);
-        project.AddCapability(mainTarget, PBXCapabilityType.NFCReader);
+        project.AddCapability(mainTarget, PBXCapabilityType.StringToPBXCapabilityType("com.apple.NearFieldCommunication");
         project.WriteToFile(projPath);
 
         string plistPath = Path.Combine(path, "Info.plist");
