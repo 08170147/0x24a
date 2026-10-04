@@ -44,7 +44,7 @@
         // 4-byte page and the tag returns 16 bytes (four consecutive pages).
         // Do not guess Classic authentication keys here. Classic/Plus/DESFire are
         // reported as unsupported until the original Android command sequence is known.
-        if (mifare.mifareFamily == NFCMiFareFamilyUltralight) {
+        if (mifare.mifareFamily == NFCMiFareUltralight) {
             NSData *command = [NSData dataWithBytes:(uint8_t[]){0x30, 0x02} length:2];
             [mifare sendMiFareCommand:command completionHandler:^(NSData * _Nullable response, NSError * _Nullable readError) {
                 if (readError) {
@@ -54,7 +54,8 @@
                 }
                 NSString *raw = [self hex:response ?: [NSData data]];
                 if ((response.length == 16) && response.length >= 16) {
-                    const uint8_t *b = response.bytes;
+                    const uint8_t *b =
+                        static_cast<const uint8_t *>(response.bytes);
                     NSMutableData *accessBytes = [NSMutableData dataWithBytes:b + 6 length:10];
                     NSString *accessCode = [self hex:accessBytes];
                     [self emit:@{ @"type": @"read_success", @"block": @2, @"raw16": raw, @"accessCode": accessCode, @"family": family, @"uid": uid }];
@@ -73,7 +74,8 @@
     [self emit:@{ @"type": @"session_invalidated", @"message": error.localizedDescription ?: @"NFC session ended" }];
 }
 - (NSString *)hex:(NSData *)data {
-    const unsigned char *b = data.bytes;
+    const unsigned char *b =
+        static_cast<const unsigned char *>(data.bytes);
     NSMutableString *s = [NSMutableString string];
     for (NSUInteger i=0; i<data.length; i++) [s appendFormat:@"%02X", b[i]];
     return s;
