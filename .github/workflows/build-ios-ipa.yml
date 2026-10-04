@@ -91,6 +91,8 @@ jobs:
       # ---------------------------------------------------------
       - name: Build unsigned iOS app
         run: |
+          set -o pipefail
+
           rm -rf Builds/UnsignedBuild
 
           xcodebuild \
@@ -104,7 +106,9 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             DEVELOPMENT_TEAM="" \
-            build
+            CODE_SIGN_ENTITLEMENTS="" \
+            build \
+            2>&1 | tee Builds/xcodebuild-unsigned.log
 
       # ---------------------------------------------------------
       # Locate the generated .app
