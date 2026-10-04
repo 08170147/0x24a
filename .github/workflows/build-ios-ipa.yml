@@ -115,7 +115,7 @@ jobs:
       # ---------------------------------------------------------
       - name: Locate unsigned app
         run: |
-          echo "Searching for .app..."
+          echo "Searching for generated .app..."
 
           find Builds/UnsignedBuild \
             -type d \
@@ -124,11 +124,19 @@ jobs:
 
           APP_PATH="$(find Builds/UnsignedBuild \
             -type d \
-            -name "Unity-iPhone.app" \
+            -name "*.app" \
             -print -quit)"
 
           if [ -z "$APP_PATH" ]; then
-            echo "ERROR: Unity-iPhone.app was not found."
+            echo "ERROR: No .app was generated."
+
+            echo ""
+            echo "===== XCODE BUILD LOG ====="
+
+            if [ -f Builds/xcodebuild-unsigned.log ]; then
+              tail -n 200 Builds/xcodebuild-unsigned.log
+            fi
+
             exit 1
           fi
 
@@ -136,7 +144,6 @@ jobs:
 
           echo "Found:"
           echo "$APP_PATH"
-
       # ---------------------------------------------------------
       # Basic app verification
       # ---------------------------------------------------------
@@ -243,6 +250,7 @@ jobs:
         with:
           name: KanadeDX-build-diagnostics
           path: |
+            Builds/xcodebuild-unsigned.log
             Builds/**/*.log
             Builds/iOS/Info.plist
             Builds/iOS/KanadeDX.entitlements
