@@ -1,4 +1,4 @@
-name: KanadeDX iOS Xcode Project
+name: KanadeDX iOS Unsigned IPA
 
 on:
   workflow_dispatch:
@@ -17,8 +17,8 @@ env:
   UNITY_VERSION: 2022.3.62f3
 
 jobs:
-  build-xcode-project:
-    name: Unity → Xcode project (no Apple signing)
+  build-unsigned-ipa:
+    name: Unity → Xcode → unsigned IPA
     runs-on: macos-latest
     timeout-minutes: 120
 
@@ -61,18 +61,19 @@ jobs:
           test -f Builds/iOS/Info.plist
           test -f Builds/iOS/KanadeDX.entitlements
 
-          grep -q 'NFCReaderUsageDescription' Builds/iOS/Info.plist
+          grep -q 'NFCReaderUsageDescription' \
+            Builds/iOS/Info.plist
 
-          grep -q \
-            'com.apple.developer.nfc.readersession.formats' \
+          grep -q 'com.apple.developer.nfc.readersession.formats' \
             Builds/iOS/KanadeDX.entitlements
 
-          grep -q 'TAG' Builds/iOS/KanadeDX.entitlements
+          grep -q 'TAG' \
+            Builds/iOS/KanadeDX.entitlements
 
           echo "Xcode project verified."
           echo "NFC configuration verified."
 
-      - name: Inspect signing configuration
+      - name: Show Xcode build settings
         run: |
           xcodebuild \
             -project Builds/iOS/Unity-iPhone.xcodeproj \
@@ -85,6 +86,132 @@ jobs:
               'PRODUCT_BUNDLE_IDENTIFIER|CODE_SIGN|INFOPLIST_FILE|CODE_SIGN_ENTITLEMENTS' \
               || true
 
+      # ---------------------------------------------------------
+      # Build an unsigned iOS .app
+      # ---------------------------------------------------------
+      - name: Build unsigned iOS app
+        run: |
+          rm -rf Builds/UnsignedBuild
+
+          xcodebuild \
+            -project Builds/iOS/Unity-iPhone.xcodeproj \
+            -scheme Unity-iPhone \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath Builds/UnsignedBuild \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            build
+
+      # ---------------------------------------------------------
+      # Locate the generated .app
+      # ---------------------------------------------------------
+      - name: Locate unsigned app
+        run: |
+          echo "Searching for .app..."
+
+          find Builds/UnsignedBuild \
+            -type d \
+            -name "*.app" \
+            -print
+
+          APP_PATH="$(find Builds/UnsignedBuild \
+            -type d \
+            -name "Unity-iPhone.app" \
+            -print -quit)"
+
+          if [ -z "$APP_PATH" ]; then
+            echo "ERROR: Unity-iPhone.app was not found."
+            exit 1
+          fi
+
+          echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
+
+          echo "Found:"
+          echo "$APP_PATH"
+
+      # ---------------------------------------------------------
+      # Basic app verification
+      # ---------------------------------------------------------
+      - name: Verify unsigned app
+        run: |
+          test -d "$APP_PATH"
+
+          test -f "$APP_PATH/Info.plist"
+
+          /usr/libexec/PlistBuddy \
+            -c "Print :CFBundleIdentifier" \
+            "$APP_PATH/Info.plist"
+
+          echo "Unsigned .app verified."
+
+      # ---------------------------------------------------------
+      # Create IPA
+      #
+      # IPA format:
+      #
+      # KanadeDX.ipa
+      # └── Payload/
+      #     └── Unity-iPhone.app
+      #
+      # No signing is performed here.
+      # ---------------------------------------------------------
+      - name: Package unsigned IPA
+        run: |
+          rm -rf Builds/IPA
+          mkdir -p Builds/IPA/Payload
+
+          cp -R "$APP_PATH" \
+            Builds/IPA/Payload/Unity-iPhone.app
+
+          cd Builds/IPA
+
+          zip -r \
+            ../KanadeDX.ipa \
+            Payload
+
+          cd ../..
+
+          echo "===================================="
+          echo "Unsigned IPA created:"
+          ls -lh Builds/KanadeDX.ipa
+          echo "===================================="
+
+      # ---------------------------------------------------------
+      # Verify IPA structure
+      # ---------------------------------------------------------
+      - name: Verify IPA structure
+        run: |
+          unzip -l Builds/KanadeDX.ipa
+
+          unzip -q Builds/KanadeDX.ipa \
+            -d Builds/IPA_Verify
+
+          test -d \
+            Builds/IPA_Verify/Payload/Unity-iPhone.app
+
+          test -f \
+            Builds/IPA_Verify/Payload/Unity-iPhone.app/Info.plist
+
+          echo "IPA structure verified."
+
+      # ---------------------------------------------------------
+      # Upload unsigned IPA
+      # ---------------------------------------------------------
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: KanadeDX-Unsigned-IPA
+          path: Builds/KanadeDX.ipa
+          if-no-files-found: error
+          retention-days: 14
+
+      # ---------------------------------------------------------
+      # Also upload Xcode project
+      # ---------------------------------------------------------
       - name: Package Xcode project
         run: |
           rm -f Builds/KanadeDX-iOS-XcodeProject.zip
@@ -103,6 +230,9 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      # ---------------------------------------------------------
+      # Diagnostics if something fails
+      # ---------------------------------------------------------
       - name: Upload build diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
