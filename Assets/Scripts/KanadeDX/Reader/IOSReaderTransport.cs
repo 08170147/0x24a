@@ -106,7 +106,7 @@ namespace KanadeDX.Reader
                     case "read_success":
                         {
                             string accessCode = Extract(json, "accessCode");
-                            pendingRead?.TrySetResult(new CardReadResult(true, accessCode, json, null));
+                            pendingRead?.TrySetResult(new CardReadResult(true, null, accessCode, null));
                             pendingRead = null;
                             terminal = true;
                             break;
