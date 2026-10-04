@@ -1,17 +1,8 @@
-name: KanadeDX iOS IPA
+name: KanadeDX iOS Xcode Project
 
 on:
   workflow_dispatch:
     inputs:
-      export_method:
-        description: "Xcode export method"
-        required: true
-        default: app-store
-        type: choice
-        options:
-          - app-store
-          - ad-hoc
-          - development
       bundle_id:
         description: "Apple App ID / Bundle Identifier"
         required: true
@@ -26,8 +17,8 @@ env:
   UNITY_VERSION: 2022.3.62f3
 
 jobs:
-  build-ipa:
-    name: Unity → Xcode → signed IPA
+  build-xcode-project:
+    name: Unity → Xcode project (no Apple signing)
     runs-on: macos-latest
     timeout-minutes: 120
 
@@ -72,54 +63,31 @@ jobs:
           grep -q 'NFCReaderUsageDescription' Builds/iOS/Info.plist
           grep -q 'com.apple.developer.nfc.readersession.formats' Builds/iOS/KanadeDX.entitlements
           grep -q 'TAG' Builds/iOS/KanadeDX.entitlements
+          echo "Xcode project and NFC configuration verified."
 
-      - name: Import Apple signing certificate
-        uses: Apple-Actions/import-codesign-certs@v7
-        with:
-          p12-file-base64: ${{ secrets.APPSTORE_CERTIFICATES_FILE_BASE64 }}
-          p12-password: ${{ secrets.APPSTORE_CERTIFICATES_PASSWORD }}
-
-      - name: Download Apple provisioning profile
-        id: profiles
-        uses: Apple-Actions/download-provisioning-profiles@v6
-        with:
-          bundle-id: ${{ inputs.bundle_id }}
-          profile-type: ${{ inputs.export_method == 'ad-hoc' && 'IOS_APP_ADHOC' || inputs.export_method == 'development' && 'IOS_APP_DEVELOPMENT' || 'IOS_APP_STORE' }}
-          issuer-id: ${{ vars.APPSTORE_ISSUER_ID }}
-          api-key-id: ${{ vars.APPSTORE_API_KEY_ID }}
-          api-private-key: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
-
-      - name: Resolve provisioning profile
-        env:
-          PROFILES_JSON: ${{ steps.profiles.outputs.profiles }}
+      - name: Inspect signing configuration
         run: |
-          PROFILE_NAME="$(printf '%s' "$PROFILES_JSON" | jq -r '.[0].name')"
-          PROFILE_UUID="$(printf '%s' "$PROFILES_JSON" | jq -r '.[0].uuid')"
-          test -n "$PROFILE_NAME" && test "$PROFILE_NAME" != "null"
-          test -n "$PROFILE_UUID" && test "$PROFILE_UUID" != "null"
-          echo "PROFILE_NAME=$PROFILE_NAME" >> "$GITHUB_ENV"
-          echo "PROFILE_UUID=$PROFILE_UUID" >> "$GITHUB_ENV"
+          xcodebuild \
+            -project Builds/iOS/Unity-iPhone.xcodeproj \
+            -scheme Unity-iPhone \
+            -configuration Release \
+            -showBuildSettings \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            | grep -E 'PRODUCT_BUNDLE_IDENTIFIER|CODE_SIGN|INFOPLIST_FILE|CODE_SIGN_ENTITLEMENTS' || true
 
-      - name: Archive and export signed IPA
-        env:
-          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          BUNDLE_ID: ${{ inputs.bundle_id }}
-          EXPORT_METHOD: ${{ inputs.export_method }}
-          PROFILE_NAME: ${{ env.PROFILE_NAME }}
-          PROFILE_UUID: ${{ env.PROFILE_UUID }}
-        run: bash Tools/cloud_build_ipa.sh
+      - name: Package Xcode project
+        run: |
+          rm -f Builds/KanadeDX-iOS-XcodeProject.zip
+          ditto -c -k --sequesterRsrc --keepParent \
+            Builds/iOS \
+            Builds/KanadeDX-iOS-XcodeProject.zip
 
-      - name: Verify final IPA
-        env:
-          BUNDLE_ID: ${{ inputs.bundle_id }}
-          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: bash Tools/verify_ipa.sh Builds/KanadeDX.ipa "$BUNDLE_ID" "$TEAM_ID"
-
-      - name: Upload IPA
+      - name: Upload Xcode project
         uses: actions/upload-artifact@v4
         with:
-          name: KanadeDX-IPA-${{ inputs.export_method }}
-          path: Builds/KanadeDX.ipa
+          name: KanadeDX-iOS-XcodeProject
+          path: Builds/KanadeDX-iOS-XcodeProject.zip
           if-no-files-found: error
           retention-days: 14
 
@@ -130,6 +98,7 @@ jobs:
           name: KanadeDX-build-diagnostics
           path: |
             Builds/**/*.log
-            Builds/ExportOptions.plist
+            Builds/iOS/Info.plist
+            Builds/iOS/KanadeDX.entitlements
           if-no-files-found: ignore
           retention-days: 7
